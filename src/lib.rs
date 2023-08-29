@@ -325,11 +325,11 @@ impl Renderable for Triangle {
     }
 }
 
-struct Rectangle{
+struct Parallelogram{
     points: [Point; 3],
 }
 
-impl Renderable for Rectangle {
+impl Renderable for Parallelogram{
     fn intersection(&self, line_of_sight : &HalfLine) -> Option<Point> {
         let v = from_points(&self.points[0], &self.points[1]);
         let w = from_points(&self.points[0], &self.points[2]);
@@ -413,7 +413,7 @@ mod tests {
             radius: 0.5,
         };
 
-        let plane = Rectangle {
+        let plane = Parallelogram{
             points: [
                 Point {x: -50.0, y: -10.0, z: -50.0},
                 Point {x: -50.0, y: -10.0, z: 50.0},
