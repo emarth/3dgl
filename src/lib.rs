@@ -113,7 +113,7 @@ pub trait Renderable {
 
 impl Projection {
 
-    fn render_pixel(&self, objects: &Vec<&dyn Renderable>, lights: &Vec<Point>, ambient: f32, w: u32, h: u32) -> Luma<u8> {
+    fn render_pixel(&self, objects: &[&dyn Renderable], lights: &[Point], ambient: f32, w: u32, h: u32) -> Luma<u8> {
         let x = w as f32 - self.width as f32 / 2.0;
         let y = self.height as f32 / 2.0 - h as f32;
 
@@ -175,7 +175,7 @@ impl Projection {
         }
     }
 
-    pub fn render(&self, objects: &Vec<&dyn Renderable>, lights: &Vec<Point>, ambient: f32) -> GrayImage {
+    pub fn render(&self, objects: &[&dyn Renderable], lights: &[Point], ambient: f32) -> GrayImage {
         // implement parallel later
         GrayImage::from_fn(self.width, self.height, |w,h| {self.render_pixel(objects, lights, ambient, w, h)})
     }
