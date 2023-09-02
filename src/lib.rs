@@ -1,5 +1,6 @@
 use image::{GrayImage, Luma};
-
+use std::sync::{Arc, mpsc::{channel, Sender}};
+use std::thread;
 // Point and Vector
 #[derive(Debug, Clone)]
 pub struct Point {
@@ -80,7 +81,7 @@ impl Vector {
 }
 
 // Projections
-
+#[derive (Clone)]
 pub struct Projection {
     focal : Point,
     plane_centre : Point,
@@ -113,7 +114,7 @@ pub trait Renderable {
 
 impl Projection {
 
-    fn render_pixel(&self, objects: &[&dyn Renderable], lights: &[Point], ambient: f32, w: u32, h: u32) -> Luma<u8> {
+    fn render_pixel(&self, objects: &[Arc<dyn Renderable + Sync + Send>], lights: &[Point], ambient: f32, w: u32, h: u32) -> Luma<u8> {
         let x = w as f32 - self.width as f32 / 2.0;
         let y = self.height as f32 / 2.0 - h as f32;
 
@@ -175,9 +176,36 @@ impl Projection {
         }
     }
 
-    pub fn render(&self, objects: &[&dyn Renderable], lights: &[Point], ambient: f32) -> GrayImage {
+    pub fn render(&self, objects: &[Arc<dyn Renderable + Sync + Send>], lights: &[Point], ambient: f32, workers: u32) -> GrayImage {
         // implement parallel later
-        GrayImage::from_fn(self.width, self.height, |w,h| {self.render_pixel(objects, lights, ambient, w, h)})
+        let mut img = GrayImage::new(self.width, self.height);
+        assert_eq!(self.height % workers, 0);
+        let block_height = self.height / workers;
+        let proj = Arc::new(self.clone());
+
+        let (tx, rx) = channel();
+        
+        for i in 0..workers {
+            let tx : Sender<(u32, u32, Luma<u8>)> = tx.clone();
+            let objs : Vec<_> = objects.iter().map(|o| {o.clone()}).collect();
+            let lights : Vec<_> = lights.iter().map(|o| {o.clone()}).collect();
+            let proj = proj.clone();
+            thread::spawn(move || {
+                // let min = (i+1)*block_height.min(proj.height);
+                for y in i*block_height..(i+1)*block_height {
+                    for x in 0..proj.width {
+                        let pixel_msg = (x, y, proj.render_pixel(&objs, &lights, ambient, x, y));
+                        tx.send(pixel_msg).unwrap();
+                    }
+                } 
+            }); 
+        }
+
+        for _ in 0..self.width*block_height*workers {
+            let (x, y, pixel) = rx.recv().unwrap();
+            *img.get_pixel_mut(x, y) = pixel;
+        }
+        img
     }
 }
 
@@ -325,7 +353,7 @@ impl Renderable for Triangle {
     }
 }
 
-struct Parallelogram{
+struct Parallelogram {
     points: [Point; 3],
 }
 
@@ -379,9 +407,9 @@ mod tests {
             }
         }).collect();
 
-        let mut objects : Vec<&dyn Renderable> = vec![];
+        let mut objects : Vec<Arc<dyn Renderable + Send + Sync>> = vec![];
 
-        for face in tetrahedron.iter() {objects.push(face)}
+        for face in tetrahedron {objects.push(Arc::new(face))}
 
         let proj = Projection {
             focal: Point {x: -10.0, y:10.0, z:10.0},
@@ -396,7 +424,7 @@ mod tests {
         let light4 = Point {x: 0.0, y: 100.0, z: 0.0};
 
         let buffer = File::create("tet.png").unwrap();
-        let image = proj.render(&objects, &vec![light3, light4], 0.33);
+        let image = proj.render(&objects, &vec![light3, light4], 0.33, 16);
         let enc = PngEncoder::new(buffer);
         image.write_with_encoder(enc).unwrap();
     }
@@ -433,9 +461,9 @@ mod tests {
         let light3 = Point {x: -50.0, y: 0.0, z: 100.0};
         let light4 = Point {x: 0.0, y: 100.0, z: 0.0};
 
-        let objects : Vec<&dyn Renderable> = vec![&s, &s2, &plane];
+        let objects : Vec<Arc<dyn Renderable + Send + Sync>> = vec![Arc::new(s), Arc::new(s2), Arc::new(plane)];
         let buffer = File::create("orb.png").unwrap();
-        let image = proj.render(&objects, &vec![light3, light4], 0.33);
+        let image = proj.render(&objects, &vec![light3, light4], 0.33, 16);
         let enc = PngEncoder::new(buffer);
         image.write_with_encoder(enc).unwrap();
     }
