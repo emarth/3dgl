@@ -4,6 +4,6 @@ Based on a (likely naïve) way to draw 3D images I thought of. Produces passable
 
 Examples are given in tests, such as a `draw_spheres` that includes a rectangle, two spheres and two light sources.
 
-Single-threaded for now, might change that. `Triangle` and `Rectangle` could be faster.
+Uses OS threads so pretty slow. 
 
 ![](orb.png)
